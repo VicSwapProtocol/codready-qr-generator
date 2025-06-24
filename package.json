@@ -1,7 +1,6 @@
 {
   "name": "codready-qr-generator",
   "version": "1.0.0",
-  "main": "index.js",
   "license": "MIT",
   "dependencies": {
     "qrcode": "^1.5.1"
