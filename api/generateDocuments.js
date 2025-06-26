@@ -3,28 +3,31 @@ import ExcelJS from 'exceljs';
 import QRCode from 'qrcode';
 import nodemailer from 'nodemailer';
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
 async function createPDF(email, packageName) {
-  const doc = new PDFDocument();
-  const chunks = [];
-  doc.on('data', (chunk) => chunks.push(chunk));
-  doc.text(`Certificate for ${email}`);
-  doc.text(`Package: ${packageName}`);
-  doc.end();
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument();
+      const chunks = [];
 
-  return new Promise((resolve) => {
-    doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.text(`Certificate for ${email}`);
+      doc.text(`Package: ${packageName}`);
+      doc.end();
+
+      doc.on('end', () => {
+        const result = Buffer.concat(chunks);
+        resolve(result);
+      });
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
 async function createExcel(email, packageName) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Sheet1');
+
   sheet.addRow(['Email', 'Package']);
   sheet.addRow([email, packageName]);
 
@@ -38,10 +41,10 @@ async function createQR(email, packageName) {
 
 async function sendEmail(email, attachments) {
   let transporter = nodemailer.createTransport({
-    service: 'gmail', // Можно заменить на любой SMTP
+    service: 'gmail',
     auth: {
-      user: process.env.EMAIL_USER,    // Укажи в Vercel переменную окружения
-      pass: process.env.EMAIL_PASSWORD,
+      user: process.env.EMAIL_USER,       // из .env
+      pass: process.env.EMAIL_PASSWORD,   // из .env
     },
   });
 
@@ -54,7 +57,7 @@ async function sendEmail(email, attachments) {
   });
 }
 
-async function generateFiles(email, packageName) {
+export async function generateFiles(email, packageName) {
   const pdf = await createPDF(email, packageName);
   const excel = await createExcel(email, packageName);
   const qr = await createQR(email, packageName);
@@ -66,33 +69,6 @@ async function generateFiles(email, packageName) {
   ]);
 }
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end('Method Not Allowed');
-
-  let buf = [];
-  for await (const chunk of req) {
-    buf.push(chunk);
-  }
-  const rawBody = Buffer.concat(buf).toString();
-
-  let event;
-  try {
-    event = JSON.parse(rawBody);
-  } catch {
-    return res.status(400).end('Invalid JSON');
-  }
-
-  if (event.type === 'payment_success') {
-    const { email, package: packageName } = event.data;
-
-    try {
-      await generateFiles(email, packageName);
-      return res.status(200).json({ received: true });
-    } catch (err) {
-      console.error(err);
-      return res.status(500).end('Error generating files or sending email');
-    }
-  }
-
-  return res.status(400).end();
+export async function sendEmail(email) {
+  // Можно убрать, так как отправка внутри generateFiles
 }
